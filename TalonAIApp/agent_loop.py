@@ -44,8 +44,7 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
                 "type": "buildplanner",
                 "build_plan": state.get("build_plan", []),
                 "message": "Here's your personalized build plan for your car!",
-                "agent_trace": trace,
-                "reasoning": "Agentic planner determined a build plan was needed"
+                "agent_trace": trace
             }
 
         if any("modcoach" in a for a in trace):
@@ -53,8 +52,7 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
                 "type": "modcoach",
                 "mod_recommendations": state.get("mod_recommendations", []),
                 "message": "Here are my recommendations for your next mods!",
-                "agent_trace": trace,
-                "reasoning": "Agentic planner determined mod recommendations were needed"
+                "agent_trace": trace
             }
 
         if any("diagnostic" in a for a in trace):
@@ -63,8 +61,7 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
                 "symptom_summary": state.get("symptom_summary", ""),
                 "followup_recommendations": state.get("followup_recommendations", []),
                 "message": "Here's my diagnosis of your car's issue:",
-                "agent_trace": trace,
-                "reasoning": "Agentic planner determined diagnostic analysis was needed"
+                "agent_trace": trace
             }
 
         if any("info" in a for a in trace):
@@ -72,16 +69,14 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
                 "type": "info",
                 "response": state.get("info_answer", "No answer available."),
                 "message": "Here's what I found for you:",
-                "agent_trace": trace,
-                "reasoning": "Agentic planner determined informational response was needed"
+                "agent_trace": trace
             }
 
         # If no specific agents ran but session ended, it might be a simple query
         return {
             "type": "simple_response",
             "message": state.get("final_message", "Session complete."),
-            "agent_trace": trace,
-            "reasoning": "Agentic planner determined no specific agents were needed"
+            "agent_trace": trace
         }
 
     # If we reach here, something unexpected happened

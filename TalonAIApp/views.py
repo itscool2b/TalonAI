@@ -85,7 +85,17 @@ async def chat_view(request):
                     } for g in profile.goals.all()
                 ]
             }
-
+        except Exception as e:
+            # Return default profile if database error
+            return {
+                "make": "",
+                "model": "",
+                "year": 2020,
+                "resale_pref": "",
+                "mods": [],
+                "symptoms": [],
+                "goals": []
+            }
 
     try:
         car_profile_dict = await get_car_profile(user_id)

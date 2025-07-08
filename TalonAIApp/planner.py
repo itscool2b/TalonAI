@@ -72,9 +72,7 @@ You are NOT a simple classifier. You are an autonomous agent that:
 ```json
 {{
   "action": "modcoach",
-  "reasoning": "User wants performance upgrades and we have a complete car profile",
-  "expected_outcome": "Will provide specific mod recommendations",
-  "next_consideration": "May need to explain technical details if user is new"
+  "reasoning": "User wants performance upgrades and we have a complete car profile"
 }}
 ```
 
@@ -83,9 +81,7 @@ You are NOT a simple classifier. You are an autonomous agent that:
 ```json
 {{
   "action": "diagnostic",
-  "reasoning": "User reports symptoms that need investigation first",
-  "expected_outcome": "Will identify the root cause of the problem",
-  "next_consideration": "After diagnosis, may need modcoach for solutions"
+  "reasoning": "User reports symptoms that need investigation first"
 }}
 ```
 
@@ -122,8 +118,6 @@ def parse_agentic_output(response: str) -> Dict[str, Any]:
         parsed = json.loads(cleaned_response)
         action = parsed.get("action")
         reasoning = parsed.get("reasoning", "")
-        expected_outcome = parsed.get("expected_outcome", "")
-        next_consideration = parsed.get("next_consideration", "")
         
         allowed_actions = {"modcoach", "diagnostic", "buildplanner", "info", "end"}
         
@@ -132,16 +126,12 @@ def parse_agentic_output(response: str) -> Dict[str, Any]:
         
         return {
             "action": action,
-            "reasoning": reasoning,
-            "expected_outcome": expected_outcome,
-            "next_consideration": next_consideration
+            "reasoning": reasoning
         }
     except Exception as e:
         return {
             "action": "end",
-            "reasoning": f"Error parsing response: {str(e)}",
-            "expected_outcome": "End session due to error",
-            "next_consideration": ""
+            "reasoning": f"Error parsing response: {str(e)}"
         }
 
 async def run_agentic_planner(state):
