@@ -3,7 +3,7 @@ from typing_extensions import TypedDict
 from openai import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from claude import call_claude
+from .claude import call_claude
 
 import json
 from typing import Any, Dict

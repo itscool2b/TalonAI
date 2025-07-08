@@ -1,4 +1,5 @@
 import json
+import os
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import async_only_middleware
@@ -8,6 +9,31 @@ from .state import AgentState
 from .agent_loop import run_agent_system
 from .memory import store_conversation_memory
 
+def check_security(request):
+    """
+    Security check for API access
+    """
+    # Check Origin header (additional layer beyond CORS)
+    origin = request.META.get('HTTP_ORIGIN', '')
+    allowed_origins = [
+        'https://talon-ai.us',
+        'https://www.talon-ai.us',
+        'http://localhost:3000',  # For development
+        'http://127.0.0.1:3000'   # For development
+    ]
+    
+    # Allow requests without origin (for server-to-server)
+    if origin and origin not in allowed_origins:
+        return False
+    
+    # Check User-Agent (basic bot protection)
+    user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+    blocked_agents = ['bot', 'crawler', 'spider', 'scraper']
+    if any(agent in user_agent for agent in blocked_agents):
+        return False
+    
+    return True
+
 @csrf_exempt
 @async_only_middleware
 async def chat_view(request):
@@ -16,6 +42,10 @@ async def chat_view(request):
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
+    
+    # Security check
+    if not check_security(request):
+        return JsonResponse({"error": "Access denied"}, status=403)
 
     try:
         body = await request.json()

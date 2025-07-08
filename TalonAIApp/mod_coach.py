@@ -3,7 +3,7 @@ from typing_extensions import TypedDict
 from openai import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from claude import call_claude
+from .claude import call_claude
 
 prompt = PromptTemplate.from_template("""You are the `modcoach` agent in a modular AI system that assists car enthusiasts with planning performance upgrades. Your job is to recommend intelligent, goal-aligned modifications for the user's car.
 

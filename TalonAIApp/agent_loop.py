@@ -1,16 +1,8 @@
 import asyncio
 from typing import Dict, Any
 
-from state import AgentState
-from planner import run_agentic_planner
-
-# agent_loop.py
-
-import asyncio
-from typing import Dict, Any
-
-from state import AgentState
-from planner import run_agentic_planner
+from .state import AgentState
+from .planner import run_agentic_planner
 
 
 async def run_agent_system(state: AgentState) -> Dict[str, Any]:

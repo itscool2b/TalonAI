@@ -2,14 +2,14 @@ from typing import List, Dict, Optional, Union, Any, TypedDict
 from openai import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from claude import call_claude
+from .claude import call_claude
 import json
-from state import AgentState
-from mod_coach import mod_coach_pipeline
-from info import info_pipeline
-from diagnostic import diagnostic_pipeline
-from build_planner import buildplanner_pipeline
-from memory import get_recent_memory, format_memory_for_prompt
+from .state import AgentState
+from .mod_coach import mod_coach_pipeline
+from .info import info_pipeline
+from .diagnostic import diagnostic_pipeline
+from .build_planner import buildplanner_pipeline
+from .memory import get_recent_memory, format_memory_for_prompt
 #
 
 # More agentic planner that can adapt based on results
