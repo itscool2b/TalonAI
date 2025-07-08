@@ -44,4 +44,17 @@ class BuildGoal(models.Model):
     goal_type = models.CharField(max_length=64)
     priority = models.PositiveIntegerField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
+
+
+class ConversationMemory(models.Model):
+    user_id = models.CharField(max_length=128)
+    session_id = models.CharField(max_length=128)  # To group conversations
+    query = models.TextField()
+    agent_trace = models.JSONField()  # Store which agents ran
+    final_output = models.JSONField()  # Store the final response
+    car_profile_snapshot = models.JSONField()  # Store car profile at time of query
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']  # Most recent first
     

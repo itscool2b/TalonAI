@@ -5,8 +5,6 @@ import os
 # Claude Sonnet 3.7 (Feb 2025) – latest Sonnet tier
 CLAUDE_MODEL = "claude-3-7-sonnet-20250219"
 
-client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
 async def call_claude(
     prompt: str,
     model: str = CLAUDE_MODEL,
@@ -27,6 +25,7 @@ async def call_claude(
     Returns:
         str: Claude's plain text response.
     """
+    client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     messages = [{"role": "user", "content": prompt}]
     if system:
         messages.insert(0, {"role": "system", "content": system})

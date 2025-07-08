@@ -10,3 +10,5 @@ class AgentState(TypedDict):
     final_message: Optional[str]
     agent_trace: List[str]
     flags: Dict[str, bool]
+    info_answer: Optional[str]
+    tool_trace: List[Dict[str, Any]]
