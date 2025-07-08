@@ -234,3 +234,32 @@ def test_view(request):
         "method": request.method,
         "debug": True
     })
+
+# Root endpoint to handle base URL requests
+@csrf_exempt
+def root_view(request):
+    """
+    Root endpoint that provides API information
+    """
+    debug_log("🏠 Root endpoint called", request.method)
+    return JsonResponse({
+        "service": "TalonAI Backend API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "chat": "/chat/ (POST) - Main AI chat endpoint",
+            "test": "/test/ (GET/POST) - Health check endpoint"
+        },
+        "usage": {
+            "chat": {
+                "method": "POST",
+                "required_fields": ["query", "user_id"],
+                "optional_fields": ["session_id"],
+                "example": {
+                    "query": "I want to add more horsepower to my car",
+                    "user_id": "user123",
+                    "session_id": "session456"
+                }
+            }
+        }
+    })
