@@ -3,9 +3,9 @@ from typing import Dict, Any
 import os
 from dotenv import load_dotenv
 
-from agent_loop import run_agent_system
+from .agent_loop import run_agent_system
 
-from state import AgentState  # import your TypedDict
+from .state import AgentState  # import your TypedDict
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 

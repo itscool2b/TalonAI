@@ -16,8 +16,8 @@ def check_security(request):
     # Check Origin header (additional layer beyond CORS)
     origin = request.META.get('HTTP_ORIGIN', '')
     allowed_origins = [
-        'https://talon-ai.us',
-        'https://www.talon-ai.us',
+        'https://talonai.us',
+        'https://www.talonai.us',
         'http://localhost:3000',  # For development
         'http://127.0.0.1:3000'   # For development
     ]

@@ -5,8 +5,8 @@ Test script to demonstrate the difference between workflow-based and agentic AI 
 
 import asyncio
 import json
-from state import AgentState
-from agent_loop import run_agent_system
+from .state import AgentState
+from .agent_loop import run_agent_system
 
 async def test_agentic_vs_workflow():
     """

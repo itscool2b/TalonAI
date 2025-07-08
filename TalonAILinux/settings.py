@@ -30,8 +30,8 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = [
     'talonaibackend.onrender.com',  # Your backend hosting
-    'talon-ai.us',                  # Your frontend domain
-    'www.talon-ai.us',              # www version
+    'talonai.us',                   # Your frontend domain
+    'www.talonai.us',               # www version
     'localhost',                     # For local development
     '127.0.0.1',                    # For local development
 ]
@@ -140,8 +140,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Security Settings
 CORS_ALLOWED_ORIGINS = [
-    "https://talon-ai.us",
-    "https://www.talon-ai.us",
+    "https://talonai.us",
+    "https://www.talonai.us",
     "http://localhost:3000",    # For local development
     "http://127.0.0.1:3000",   # For local development
 ]
