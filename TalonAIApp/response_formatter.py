@@ -108,7 +108,7 @@ def format_modcoach_response(state: Dict[str, Any]) -> Dict[str, Any]:
     if mod_recommendations is None:
         mod_recommendations = []
     
-    if mod_recommendations and len(mod_recommendations) > 0:
+    if mod_recommendations and len(mod_recommendations or []) > 0:
         message = "Here are my mod recommendations for your car:"
         response_text = format_mod_recommendations_text(mod_recommendations)
     else:
@@ -121,7 +121,7 @@ def format_modcoach_response(state: Dict[str, Any]) -> Dict[str, Any]:
         "response_type": "modification_recommendations",
         "data": {
             "mod_recommendations": mod_recommendations,
-            "total_recommendations": len(mod_recommendations) if mod_recommendations else 0
+            "total_recommendations": len(mod_recommendations or []) if mod_recommendations else 0
         }
     }
 
@@ -160,7 +160,7 @@ def format_buildplanner_response(state: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(build_plan, list):
         build_plan = []
     
-    if build_plan and len(build_plan) > 0:
+    if build_plan and len(build_plan or []) > 0:
         message = "Here's your personalized build plan for your car!"
         response_text = format_build_plan_text(build_plan)
     else:
@@ -173,7 +173,7 @@ def format_buildplanner_response(state: Dict[str, Any]) -> Dict[str, Any]:
         "response_type": "build_planning",
         "data": {
             "build_plan": build_plan,
-            "total_stages": len(build_plan) if build_plan else 0
+            "total_stages": len(build_plan or []) if build_plan else 0
         }
     }
 
