@@ -66,7 +66,7 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
 
         # Use the comprehensive response formatter
         debug_log("🎯 Formatting comprehensive response")
-        formatted_response = await format_agent_response(state)
+        formatted_response = format_agent_response(state)
         debug_log("✅ Response formatted successfully")
         
         return formatted_response

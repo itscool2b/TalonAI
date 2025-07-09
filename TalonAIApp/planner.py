@@ -2,190 +2,199 @@ from typing import Dict, Any
 import json
 from .claude import call_claude
 from .state import AgentState
-from .tools import tool_registry, execute_tool
 from .memory import get_recent_memory, format_memory_for_prompt
+from .info import info_pipeline
+from .mod_coach import mod_coach_pipeline
+from .diagnostic import diagnostic_pipeline
+from .build_planner import buildplanner_pipeline
 
 async def run_agentic_planner(state: AgentState) -> AgentState:
     """
-    Dynamic LLM-based planner that decides what to do and calls tools as needed
+    Agentic planner that can adapt its strategy based on results
     """
+    max_iterations = 5  # Prevent infinite loops
+    iteration = 0
     
-    # Get recent memory for context
-    try:
-        memories = await get_recent_memory(state.get("user_id", ""), limit=3)
-        memory_context = format_memory_for_prompt(memories)
-    except Exception as e:
-        print(f"⚠️ Memory retrieval failed: {e}")
-        memory_context = "No previous conversations found."
-    
-    # Get available tools
-    available_tools = tool_registry.list_tools()
-    
-    # Create dynamic prompt with current state
-    prompt = f"""
-You are an intelligent automotive assistant planner. You analyze user queries and decide what actions to take.
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Get recent memory for context
+        try:
+            memories = await get_recent_memory(state.get("user_id", ""), limit=3)
+            memory_context = format_memory_for_prompt(memories)
+        except Exception as e:
+            print(f"⚠️ Memory retrieval failed: {e}")
+            memory_context = "No previous conversations found."
+        
+        prompt = f"""
+You are an **Autonomous Planning Agent** in a modular AI system for car enthusiasts. Unlike a simple router, you have the ability to:
 
-CURRENT STATE:
-- User Query: "{state.get('query', '')}"
-- User ID: {state.get('user_id', '')}
-- Session ID: {state.get('session_id', '')}
-- Car Profile: {json.dumps(state.get('car_profile', {}), indent=2)}
-- Previous Actions: {json.dumps(state.get('agent_trace', []), indent=2)}
+1. **Dynamically adapt** your strategy based on intermediate results
+2. **Decide when to stop** or continue based on what you discover
+3. **Request additional information** if needed
+4. **Change your approach** if initial attempts don't work
+5. **Learn from context** and previous interactions
 
-MEMORY CONTEXT:
+────────────────────────────────────────────────
+🚗 AVAILABLE CAPABILITIES
+────────────────────────────────────────────────
+• `modcoach`     — Recommends performance upgrades based on car profile and goals  
+• `diagnostic`   — Analyzes mechanical symptoms and problems
+• `buildplanner` — Creates long-term build plans
+• `info`         — Provides factual information
+
+• `end`          — Complete the session when satisfied
+
+────────────────────────────────────────────────
+📦 CURRENT CONTEXT
+────────────────────────────────────────────────
+User Query: {state.get('query', '')}
+
+Car Profile: {json.dumps(state.get('car_profile', {}), indent=2)}
+
+Previous Actions: {json.dumps(state.get('agent_trace', []), indent=2)}
+
+Current State: {json.dumps(state.get('flags', {}), indent=2)}
+
+Build Plan: {json.dumps(state.get('build_plan'), indent=2) if state.get('build_plan') else 'None'}
+
+Mod Recommendations: {json.dumps(state.get('mod_recommendations'), indent=2) if state.get('mod_recommendations') else 'None'}
+
+Symptom Summary: {state.get('symptom_summary') or 'None'}
+
 {memory_context}
 
-AVAILABLE TOOLS:
-{json.dumps(available_tools, indent=2)}
+────────────────────────────────────────────────
+🧠 AGENTIC DECISION MAKING
+────────────────────────────────────────────────
+You are NOT a simple classifier. You are an autonomous agent that:
 
-CURRENT RESULTS:
-- Mod Recommendations: {json.dumps(state.get('mod_recommendations'), indent=2) if state.get('mod_recommendations') else 'None'}
-- Diagnostic Results: {json.dumps(state.get('symptom_summary'), indent=2) if state.get('symptom_summary') else 'None'}
-- Build Plan: {json.dumps(state.get('build_plan'), indent=2) if state.get('build_plan') else 'None'}
-- Info Answer: {json.dumps(state.get('info_answer'), indent=2) if state.get('info_answer') else 'None'}
+1. **Evaluates the current situation** - What do we know? What's missing?
+2. **Plans the next action** - What would be most valuable to do next?
+3. **Adapts to results** - If an action reveals new information, how should you respond?
+4. **Knows when to stop** - Are we satisfied with the outcome?
 
-INSTRUCTIONS:
-1. Analyze the user's query and current state
-2. Decide what action to take next
-3. You can either:
-   - Call a tool to get more information or perform an action
-   - Provide a direct response if you have enough information
-   - End the conversation if the user's needs are met
+**Think like a real agent:**
+- "Can the info agent answer this question directly with general automotive knowledge?"
+- "Does this require specialized diagnosis tools or symptom analysis?"
+- "Does this need specific mod recommendations based on car profile?" 
+- "Does this require multi-stage build planning?"
+- "Is this a complete answer or do we need more specialized help?"
 
-RESPONSE FORMAT:
-Return a JSON object with ONE of these structures:
+**DECISION LOGIC:**
+1. **Start with info agent** for any question that can be answered with general knowledge
+2. **Use diagnostic agent** only when specific symptoms need analysis or troubleshooting tools
+3. **Use modcoach agent** only when specific performance modifications are requested  
+4. **Use buildplanner agent** only when multi-stage build sequences are needed
+5. **End session** when the user's question has been fully addressed
 
-To call a tool:
+**EFFICIENCY RULES:**
+- **If info agent has already run and provided a complete answer** → END the session
+- **Don't repeat the same agent multiple times** unless new information is needed
+- **Simple greetings and general questions** → info agent ONCE, then END
+
+**WHEN TO END:**
+- Info agent just handled a greeting (hello, hi, hey) → END immediately
+- Info agent provided a complete answer to a general question → END immediately  
+- Any agent provided what the user requested → END immediately
+- User's question has been fully addressed → END immediately
+
+**Your response must be valid JSON:**
+
+```json
 {{
-    "action": "use_tool",
-    "tool_name": "tool_name",
-    "tool_parameters": {{
-        "param1": "value1",
-        "param2": "value2"
-    }},
-    "reasoning": "Why you're calling this tool"
+  "action": "info",
+  "reasoning": "This is a general question the info agent can answer with automotive knowledge"
 }}
+```
 
-To provide a direct response:
+**OR when specialized tools are needed:**
+
+```json
 {{
-    "action": "respond",
-    "response_type": "info|modcoach|diagnostic|buildplanner",
-    "response": "Your response to the user",
-    "reasoning": "Why you're providing this response"
+  "action": "diagnostic",
+  "reasoning": "User reports specific symptoms that require diagnostic tools and analysis"
 }}
+```
 
-To end the conversation:
+**OR to end:**
+
+```json
 {{
-    "action": "end",
-    "final_response": "Final response to user",
-    "reasoning": "Why you're ending the conversation"
+  "action": "end",
+  "reasoning": "Have provided comprehensive answer to user's query",
+  "summary": "User now has the information and recommendations they requested"
 }}
+```
 
-DECISION LOGIC:
-- If user mentions car details you don't have, use "update_car_profile" tool
-- If user asks for modifications/performance, use "generate_mod_recommendations" tool
-- If user reports symptoms/problems, use "diagnose_symptoms" tool
-- If user wants a build plan, use "create_build_plan" tool
-- If user needs car specs, use "get_car_specs" tool
-- If you can answer with general knowledge, provide direct response
-- If user's needs are fully met, end the conversation
-
-Be intelligent and context-aware. Don't repeat actions unnecessarily.
+🛑 Return ONLY valid JSON. No explanations outside the JSON.
 """
 
-    try:
-        response = await call_claude(prompt, temperature=0.3)
+        print(f"\n🧠 AGENTIC PLANNER (Iteration {iteration}): Analyzing current state...")
+        raw = await call_claude(prompt)
+        decision = parse_agentic_output(raw)
         
-        # Parse LLM response
+        action = decision["action"]
+        reasoning = decision["reasoning"]
+        
+        print(f"🎯 AGENTIC PLANNER: {action} - {reasoning}")
+        state["agent_trace"].append(f"AgenticPlanner[{iteration}] → {action}: {reasoning}")
+        
+        # Execute the chosen action
+        if action == "modcoach":
+            print(f"🚀 Running MODCOACH agent...")
+            state = await mod_coach_pipeline(state)
+        elif action == "diagnostic":
+            print(f"🔧 Running DIAGNOSTIC agent...")
+            state = await diagnostic_pipeline(state)
+        elif action == "buildplanner":
+            print(f"📋 Running BUILDPLANNER agent...")
+            state = await buildplanner_pipeline(state)
+        elif action == "info":
+            print(f"📚 Running INFO agent...")
+            state = await info_pipeline(state)
+
+        elif action == "end":
+            print(f"✅ AGENTIC PLANNER: Session complete")
+            if not state.get("final_message"):
+                state["final_message"] = "Session complete. Happy driving!"
+            break
+    
+    if iteration >= max_iterations:
+        print(f"⚠️ AGENTIC PLANNER: Reached max iterations, ending session")
+        state["final_message"] = "I've reached the maximum number of planning iterations. Please try rephrasing your question if you need more help."
+        state["agent_trace"].append(f"AgenticPlanner[{iteration}] → end: Reached maximum iterations")
+    
+    return state
+
+def parse_agentic_output(response: str) -> Dict[str, Any]:
+    try:
+        # Clean up the response - remove markdown code blocks if present
         cleaned_response = response.strip()
         if cleaned_response.startswith("```json"):
-            cleaned_response = cleaned_response[7:-3]
-        elif cleaned_response.startswith("```"):
-            cleaned_response = cleaned_response[3:-3]
+            cleaned_response = cleaned_response[7:]
+        if cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response[3:]
+        if cleaned_response.endswith("```"):
+            cleaned_response = cleaned_response[:-3]
         
-        decision = json.loads(cleaned_response)
+        cleaned_response = cleaned_response.strip()
         
-        # Execute the decision
-        return await execute_planner_decision(state, decision)
+        parsed = json.loads(cleaned_response)
+        action = parsed.get("action")
+        reasoning = parsed.get("reasoning", "")
         
-    except Exception as e:
-        print(f"❌ Error in planner: {e}")
-        # Fallback to ending conversation
-        state["final_message"] = "I encountered an error processing your request. Please try again."
-        state["agent_trace"].append(f"Planner error: {str(e)}")
-        return state
-
-async def execute_planner_decision(state: AgentState, decision: Dict[str, Any]) -> AgentState:
-    """Execute the planner's decision"""
-    
-    action = decision.get("action", "end")
-    reasoning = decision.get("reasoning", "No reasoning provided")
-    
-    # Log the decision
-    state["agent_trace"].append(f"Planner → {action}: {reasoning}")
-    
-    if action == "use_tool":
-        # Execute tool
-        tool_name = decision.get("tool_name")
-        tool_parameters = decision.get("tool_parameters", {})
+        allowed_actions = {"modcoach", "diagnostic", "buildplanner", "info", "end"}
         
-        print(f"🔧 Executing tool: {tool_name} with params: {tool_parameters}")
+        if action not in allowed_actions:
+            raise ValueError(f"Invalid action: {action}")
         
-        tool_result = await execute_tool(tool_name, **tool_parameters)
-        
-        # Store tool result in state
-        state["tool_trace"].append({
-            "tool": tool_name,
-            "parameters": tool_parameters,
-            "result": tool_result,
+        return {
+            "action": action,
             "reasoning": reasoning
-        })
-        
-        # Update state based on tool result
-        if tool_result.get("success") and tool_result.get("result"):
-            result = tool_result["result"]
-            
-            if tool_name == "update_car_profile":
-                # Profile updated in tool, refresh car profile
-                pass
-            elif tool_name == "generate_mod_recommendations":
-                state["mod_recommendations"] = result.get("recommendations", [])
-            elif tool_name == "diagnose_symptoms":
-                state["symptom_summary"] = result.get("diagnosis", {}).get("explanation", "")
-            elif tool_name == "create_build_plan":
-                state["build_plan"] = result.get("build_plan", [])
-            elif tool_name == "get_car_specs":
-                state["car_specs"] = result
-        
-        # Don't end conversation, let planner decide next action
-        return state
-        
-    elif action == "respond":
-        # Provide direct response
-        response_type = decision.get("response_type", "info")
-        response_text = decision.get("response", "")
-        
-        if response_type == "info":
-            state["info_answer"] = response_text
-        elif response_type == "modcoach":
-            state["mod_recommendations"] = [{"name": "Custom Response", "justification": response_text}]
-        elif response_type == "diagnostic":
-            state["symptom_summary"] = response_text
-        elif response_type == "buildplanner":
-            state["build_plan"] = [{"stage": "Custom", "description": response_text}]
-        
-        # Don't end conversation, let planner decide next action
-        return state
-        
-    elif action == "end":
-        # End conversation
-        final_response = decision.get("final_response", "Thank you for using TalonAI!")
-        state["final_message"] = final_response
-        state["agent_trace"].append(f"Planner → end: {reasoning}")
-        return state
-    
-    else:
-        # Unknown action, end conversation
-        state["final_message"] = "I'm not sure how to help with that. Please try rephrasing your question."
-        state["agent_trace"].append(f"Planner → unknown action: {action}")
-        return state
+        }
+    except Exception as e:
+        return {
+            "action": "end",
+            "reasoning": f"Error parsing response: {str(e)}"
+        }
