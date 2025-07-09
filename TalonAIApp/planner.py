@@ -145,8 +145,10 @@ async def run_agentic_planner(state):
         iteration += 1
         
         # Get recent memory for context
-        memories = await get_recent_memory(state.get("user_id", ""), limit=3)
-        memory_context = format_memory_for_prompt(memories)
+        # Temporarily disable memory until table is created
+        # memories = await get_recent_memory(state.get("user_id", ""), limit=3)
+        # memory_context = format_memory_for_prompt(memories)
+        memory_context = "No previous conversations found."
         
         prompt = agentic_planner.format(
             query=state["query"],
