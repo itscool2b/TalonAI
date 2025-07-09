@@ -37,9 +37,9 @@ CURRENT STATE:
 - Current Results:
   * Info Answer: {state.get('info_answer', 'None')}
   * Profile Updated: {state.get('profile_updated', False)}
-  * Mod Recommendations: {len(state.get('mod_recommendations') or [])} recommendations
+  * Mod Recommendations: {len(state.get('mod_recommendations') or []) if state.get('mod_recommendations') else 0} recommendations
   * Diagnostic Results: {'Available' if state.get('symptom_summary') else 'None'}
-  * Build Plan: {len(state.get('build_plan') or [])} stages
+  * Build Plan: {len(state.get('build_plan') or []) if state.get('build_plan') else 0} stages
 
 MEMORY CONTEXT:
 {memory_context}
