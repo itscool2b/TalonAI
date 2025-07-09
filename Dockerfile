@@ -27,7 +27,8 @@ COPY . .
 RUN chmod +x startup.sh
 
 # ───── Collect static files (optional for admin panel) ─────
-RUN python manage.py collectstatic --noinput || true
+# Skip collectstatic during build to avoid database connections
+# RUN python manage.py collectstatic --noinput || true
 
 # ───── Use startup script that runs migrations then starts server ─────
 CMD ["./startup.sh", "gunicorn", "--bind", "0.0.0.0:8000", "TalonAILinux.asgi:application", "-k", "uvicorn.workers.UvicornWorker"]
