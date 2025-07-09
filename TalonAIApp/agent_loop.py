@@ -50,38 +50,58 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
         # Priority order: buildplanner > modcoach > diagnostic > info
         if any("buildplanner" in a for a in trace):
             debug_log("📋 Returning buildplanner response")
+            build_plan = state.get("build_plan", [])
+            if build_plan and len(build_plan) > 0:
+                message = "Here's your personalized build plan for your car!"
+            else:
+                message = "I'd be happy to help you create a build plan! Tell me about your car and what you want to achieve."
             return {
                 "type": "buildplanner",
-                "build_plan": state.get("build_plan", []),
-                "message": "Here's your personalized build plan for your car!",
+                "build_plan": build_plan,
+                "message": message,
                 "agent_trace": trace
             }
 
         if any("modcoach" in a for a in trace):
             debug_log("🚗 Returning modcoach response")
+            mod_recommendations = state.get("mod_recommendations", [])
+            if mod_recommendations and len(mod_recommendations) > 0:
+                message = "Here are my recommendations for your next mods!"
+            else:
+                message = "I'd love to help you choose your next modifications! What kind of performance are you looking for?"
             return {
                 "type": "modcoach",
-                "mod_recommendations": state.get("mod_recommendations", []),
-                "message": "Here are my recommendations for your next mods!",
+                "mod_recommendations": mod_recommendations,
+                "message": message,
                 "agent_trace": trace
             }
 
         if any("diagnostic" in a for a in trace):
             debug_log("🔧 Returning diagnostic response")
+            symptom_summary = state.get("symptom_summary", "")
+            if symptom_summary and symptom_summary.strip():
+                message = "Here's my diagnosis of your car's issue:"
+            else:
+                message = "I'd be happy to help diagnose any car issues. Could you describe what symptoms you're experiencing?"
             return {
                 "type": "diagnostic",
-                "symptom_summary": state.get("symptom_summary", ""),
+                "symptom_summary": symptom_summary,
                 "followup_recommendations": state.get("followup_recommendations", []),
-                "message": "Here's my diagnosis of your car's issue:",
+                "message": message,
                 "agent_trace": trace
             }
 
         if any("info" in a for a in trace):
             debug_log("📚 Returning info response")
+            info_answer = state.get("info_answer", "")
+            if info_answer and info_answer.strip():
+                message = "Here's what I found for you:"
+            else:
+                message = "Hello! I'm TalonAI, your automotive assistant. What would you like to know about your car?"
             return {
                 "type": "info",
-                "response": state.get("info_answer", "No answer available."),
-                "message": "Here's what I found for you:",
+                "response": info_answer,
+                "message": message,
                 "agent_trace": trace
             }
 
