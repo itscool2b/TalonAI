@@ -18,6 +18,10 @@ async def store_conversation_memory(
     Store a conversation interaction in memory
     """
     try:
+        from django.db import connection
+        # Close any existing connections to avoid pool issues
+        connection.close()
+        
         await ConversationMemory.objects.acreate(
             user_id=user_id,
             session_id=session_id,
@@ -34,6 +38,9 @@ async def store_conversation_memory(
         # Check if it's a table doesn't exist error
         if "does not exist" in str(e):
             print("💡 Database table missing - run migrations: python manage.py migrate")
+        # Check if it's a connection pool error
+        elif "MaxClientsInSessionMode" in str(e) or "max clients reached" in str(e):
+            print("💡 Database pool limit reached - skipping memory storage")
         # Don't raise the error - memory storage is not critical
 
 async def cleanup_old_memories(user_id: str, max_memories: int = 10, days_to_keep: int = 7) -> None:
@@ -42,27 +49,35 @@ async def cleanup_old_memories(user_id: str, max_memories: int = 10, days_to_kee
     - Keep only max_memories per user
     - Delete memories older than days_to_keep
     """
-    # Delete memories older than days_to_keep
-    cutoff_date = timezone.now() - timedelta(days=days_to_keep)
-    await ConversationMemory.objects.filter(
-        user_id=user_id,
-        created_at__lt=cutoff_date
-    ).adelete()
-    
-    # If still too many memories, delete oldest ones
-    memory_count = await ConversationMemory.objects.filter(user_id=user_id).acount()
-    if memory_count > max_memories:
-        # Get IDs of oldest memories to delete
-        # Use sync_to_async to handle the values_list query
-        @sync_to_async
-        def get_old_memory_ids():
-            return list(ConversationMemory.objects.filter(
-                user_id=user_id
-            ).order_by('created_at')[:memory_count - max_memories].values_list('id', flat=True))
+    try:
+        from django.db import connection
+        # Close any existing connections to avoid pool issues
+        connection.close()
         
-        old_memories = await get_old_memory_ids()
+        # Delete memories older than days_to_keep
+        cutoff_date = timezone.now() - timedelta(days=days_to_keep)
+        await ConversationMemory.objects.filter(
+            user_id=user_id,
+            created_at__lt=cutoff_date
+        ).adelete()
         
-        await ConversationMemory.objects.filter(id__in=old_memories).adelete()
+        # If still too many memories, delete oldest ones
+        memory_count = await ConversationMemory.objects.filter(user_id=user_id).acount()
+        if memory_count > max_memories:
+            # Get IDs of oldest memories to delete
+            # Use sync_to_async to handle the values_list query
+            @sync_to_async
+            def get_old_memory_ids():
+                return list(ConversationMemory.objects.filter(
+                    user_id=user_id
+                ).order_by('created_at')[:memory_count - max_memories].values_list('id', flat=True))
+            
+            old_memories = await get_old_memory_ids()
+            
+            await ConversationMemory.objects.filter(id__in=old_memories).adelete()
+    except Exception as e:
+        print(f"⚠️ Error cleaning up old memories: {e}")
+        # Don't raise the error - cleanup is not critical
 
 async def get_recent_memory(
     user_id: str, 
@@ -76,11 +91,18 @@ async def get_recent_memory(
         @sync_to_async
         def get_memories():
             try:
+                from django.db import connection
+                # Close any existing connections to avoid pool issues
+                connection.close()
+                
                 return list(ConversationMemory.objects.filter(
                     user_id=user_id
                 ).order_by('-created_at')[:limit].values())
             except Exception as db_error:
                 print(f"⚠️ Database error in get_memories: {db_error}")
+                # If it's a connection pool error, return empty list
+                if "MaxClientsInSessionMode" in str(db_error) or "max clients reached" in str(db_error):
+                    print("💡 Database pool limit reached - returning empty memory")
                 return []
         
         memories = await get_memories()

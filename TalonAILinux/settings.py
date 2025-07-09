@@ -89,9 +89,9 @@ import dj_database_url
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('db_key'),
-        conn_max_age=60,  # Reduced from 600 to minimize connection pooling
+        conn_max_age=0,  # Disable connection pooling to avoid pool limits
         ssl_require=True,  # required by Supabase
-        conn_health_checks=True  # Enable connection health checks
+        conn_health_checks=False  # Disable health checks to reduce connections
     )
 }
 

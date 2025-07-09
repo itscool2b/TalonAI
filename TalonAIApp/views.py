@@ -120,6 +120,10 @@ async def chat_view(request):
         Retrieve car profile and all related data from database
         """
         try:
+            from django.db import connection
+            # Close any existing connections to avoid pool issues
+            connection.close()
+            
             profile, created = CarProfile.objects.get_or_create(
                 user_id=user_id,
                 defaults={
@@ -162,6 +166,7 @@ async def chat_view(request):
                 ]
             }
         except Exception as e:
+            print(f"⚠️ Database error loading car profile: {e}")
             # Return default profile if database error
             return {
                 "make": "",
