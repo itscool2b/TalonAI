@@ -204,15 +204,16 @@ async def chat_view(request):
         
         # Store the conversation in memory
         debug_log("💾 Storing conversation memory")
-        await store_conversation_memory(
-            user_id=user_id,
-            session_id=session_id,
-            query=user_query,
-            agent_trace=result.get("agent_trace", []),
-            final_output=result,
-            car_profile=car_profile_dict
-        )
-        debug_log("✅ Memory stored successfully")
+        # Temporarily disabled until migration applies
+        # await store_conversation_memory(
+        #     user_id=user_id,
+        #     session_id=session_id,
+        #     query=user_query,
+        #     agent_trace=result.get("agent_trace", []),
+        #     final_output=result,
+        #     car_profile=car_profile_dict
+        # )
+        debug_log("✅ Memory storage skipped (temporarily disabled)")
         
         debug_log("🚀 Returning response", result)
         return JsonResponse(result)
