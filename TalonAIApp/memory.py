@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 from datetime import timedelta
 from .models import ConversationMemory
+from asgiref.sync import sync_to_async
 
 async def store_conversation_memory(
     user_id: str,
@@ -45,9 +46,14 @@ async def cleanup_old_memories(user_id: str, max_memories: int = 10, days_to_kee
     memory_count = await ConversationMemory.objects.filter(user_id=user_id).acount()
     if memory_count > max_memories:
         # Get IDs of oldest memories to delete
-        old_memories = await ConversationMemory.objects.filter(
-            user_id=user_id
-        ).order_by('created_at')[:memory_count - max_memories].avalues_list('id', flat=True)
+        # Use sync_to_async to handle the values_list query
+        @sync_to_async
+        def get_old_memory_ids():
+            return list(ConversationMemory.objects.filter(
+                user_id=user_id
+            ).order_by('created_at')[:memory_count - max_memories].values_list('id', flat=True))
+        
+        old_memories = await get_old_memory_ids()
         
         await ConversationMemory.objects.filter(id__in=old_memories).adelete()
 
@@ -58,9 +64,14 @@ async def get_recent_memory(
     """
     Get recent conversation history for a user
     """
-    memories = await ConversationMemory.objects.filter(
-        user_id=user_id
-    ).order_by('-created_at')[:limit].avalues()
+    # Use sync_to_async to handle the values query
+    @sync_to_async
+    def get_memories():
+        return list(ConversationMemory.objects.filter(
+            user_id=user_id
+        ).order_by('-created_at')[:limit].values())
+    
+    memories = await get_memories()
     
     return [
         {
@@ -80,10 +91,15 @@ async def get_session_memory(
     """
     Get all conversations from a specific session
     """
-    memories = await ConversationMemory.objects.filter(
-        user_id=user_id,
-        session_id=session_id
-    ).order_by('created_at').avalues()
+    # Use sync_to_async to handle the values query
+    @sync_to_async
+    def get_memories():
+        return list(ConversationMemory.objects.filter(
+            user_id=user_id,
+            session_id=session_id
+        ).order_by('created_at').values())
+    
+    memories = await get_memories()
     
     return [
         {
