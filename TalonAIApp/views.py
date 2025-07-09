@@ -76,7 +76,12 @@ async def chat_view(request):
     debug_log("✅ Security check passed")
 
     try:
-        body = await request.json()
+        # Django's ASGIRequest doesn\'t provide a .json() helper; parse manually
+        try:
+            body = json.loads(request.body.decode("utf-8"))
+        except Exception as e:
+            debug_log("❌ JSON decode error", str(e))
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         debug_log("✅ JSON parsed successfully", body)
     except json.JSONDecodeError as e:
         debug_log("❌ JSON decode error", str(e))
