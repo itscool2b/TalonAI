@@ -1,139 +1,126 @@
-import re
-from typing import Dict, Any, Optional
-from asgiref.sync import sync_to_async
+import json
+from .claude import call_claude
 from .models import CarProfile
+from asgiref.sync import sync_to_async
 
-def extract_car_info_from_query(query: str) -> Dict[str, Any]:
+async def profile_updater_pipeline(state):
     """
-    Extract car information from user query using pattern matching
+    Dynamic LLM-based profile updater agent
     """
-    car_info = {}
     
-    # Extract name
-    name_patterns = [
-        r"my name is (\w+)",
-        r"i'm (\w+)",
-        r"i am (\w+)",
-        r"call me (\w+)"
-    ]
+    query = state.get("query", "")
+    user_id = state.get("user_id", "")
     
-    for pattern in name_patterns:
-        match = re.search(pattern, query.lower())
-        if match:
-            car_info["name"] = match.group(1).title()
-            break
-    
-    # Extract car make and model
-    car_patterns = [
-        r"(\d{4})\s+(\w+)\s+(\w+(?:\s+\w+)*)",  # 2020 Honda Civic Si
-        r"(\w+)\s+(\w+(?:\s+\w+)*)\s+(\d{4})",  # Honda Civic Si 2020
-        r"i drive a (\d{4})\s+(\w+)\s+(\w+(?:\s+\w+)*)",  # I drive a 2020 Honda Civic
-        r"i have a (\d{4})\s+(\w+)\s+(\w+(?:\s+\w+)*)",  # I have a 2020 Honda Civic
-    ]
-    
-    for pattern in car_patterns:
-        match = re.search(pattern, query.lower())
-        if match:
-            groups = match.groups()
-            if len(groups) >= 3:
-                # Try to determine which group is year, make, model
-                year_candidates = [g for g in groups if g.isdigit() and len(g) == 4]
-                if year_candidates:
-                    year = year_candidates[0]
-                    remaining = [g for g in groups if g != year]
-                    if len(remaining) >= 2:
-                        car_info["year"] = int(year)
-                        car_info["make"] = remaining[0].title()
-                        car_info["model"] = remaining[1].title()
-            break
-    
-    # Extract performance interests
-    performance_keywords = [
-        "performance", "track", "racing", "modifications", "mods", 
-        "horsepower", "turbo", "supercharger", "tune", "exhaust"
-    ]
-    
-    if any(keyword in query.lower() for keyword in performance_keywords):
-        car_info["performance_interest"] = True
-    
-    return car_info
-
-@sync_to_async
-def update_car_profile_from_query(user_id: str, query: str) -> bool:
-    """
-    Update car profile based on extracted information from query
-    """
+    # Get current profile
     try:
-        car_info = extract_car_info_from_query(query)
+        current_profile = await get_current_profile(user_id)
+    except Exception as e:
+        current_profile = {}
+    
+    prompt = f"""
+You are a car profile extraction and update specialist. Analyze the user's query and determine if it contains car information that should be stored.
+
+Current Profile: {json.dumps(current_profile, indent=2)}
+User Query: "{query}"
+
+Extract any car information from the query including:
+- Make (manufacturer) 
+- Model
+- Year
+- Performance preferences
+- Goals
+- Name (if mentioned)
+
+Determine if the profile should be updated and provide a summary.
+
+Return JSON:
+{{
+    "should_update": true_or_false,
+    "updates": {{
+        "make": "extracted_make_or_null",
+        "model": "extracted_model_or_null", 
+        "year": extracted_year_or_null,
+        "resale_pref": "extracted_preference_or_null"
+    }},
+    "extracted_info": {{
+        "name": "extracted_name_or_null",
+        "interests": ["performance", "goals"],
+        "summary": "what_was_learned_about_user"
+    }},
+    "response": "conversational_response_to_user_about_profile_update"
+}}
+
+Only include fields you actually found. Be conversational in your response.
+"""
+
+    try:
+        response = await call_claude(prompt, temperature=0.1)
         
-        if not car_info:
-            return False
+        # Parse response
+        cleaned_response = response.strip()
+        if cleaned_response.startswith("```json"):
+            cleaned_response = cleaned_response[7:-3]
+        elif cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response[3:-3]
         
-        profile, created = CarProfile.objects.get_or_create(
-            user_id=user_id,
-            defaults={
-                "make": "",
-                "model": "",
-                "year": 2020,
-                "resale_pref": ""
-            }
-        )
+        result = json.loads(cleaned_response)
         
-        updated = False
+        # Update database if needed
+        if result.get("should_update") and result.get("updates"):
+            await update_profile_in_db(user_id, result["updates"])
+            
+        # Store results in state
+        state["profile_updated"] = result.get("should_update", False)
+        state["extracted_info"] = result.get("extracted_info", {})
+        state["profile_response"] = result.get("response", "Profile information noted.")
         
-        if "make" in car_info and car_info["make"] and not profile.make:
-            profile.make = car_info["make"]
-            updated = True
-        
-        if "model" in car_info and car_info["model"] and not profile.model:
-            profile.model = car_info["model"]
-            updated = True
-        
-        if "year" in car_info and car_info["year"] and profile.year == 2020:
-            profile.year = car_info["year"]
-            updated = True
-        
-        if "performance_interest" in car_info and not profile.resale_pref:
-            profile.resale_pref = "performance"
-            updated = True
-        
-        if updated:
-            profile.save()
-            return True
-        
-        return False
+        return state
         
     except Exception as e:
-        print(f"⚠️ Error updating car profile: {e}")
+        print(f"Error in profile updater: {e}")
+        state["profile_response"] = "I'll keep that information in mind for future recommendations."
+        return state
+
+@sync_to_async
+def get_current_profile(user_id: str):
+    """Get current car profile from database"""
+    try:
+        profile = CarProfile.objects.get(user_id=user_id)
+        return {
+            "make": profile.make,
+            "model": profile.model,
+            "year": profile.year,
+            "resale_pref": profile.resale_pref
+        }
+    except CarProfile.DoesNotExist:
+        return {}
+
+@sync_to_async  
+def update_profile_in_db(user_id: str, updates):
+    """Update car profile in database"""
+    try:
+        profile, created = CarProfile.objects.get_or_create(
+            user_id=user_id,
+            defaults={"make": "", "model": "", "year": 2020, "resale_pref": ""}
+        )
+        
+        for key, value in updates.items():
+            if value is not None and hasattr(profile, key):
+                if key == 'year':
+                    profile.year = int(value)
+                else:
+                    setattr(profile, key, str(value))
+        
+        profile.save()
+        return True
+        
+    except Exception as e:
+        print(f"Error updating profile: {e}")
         return False
 
-def format_car_profile_summary(car_profile: Dict[str, Any]) -> str:
-    """
-    Format car profile into a readable summary
-    """
-    if not car_profile:
-        return "No car profile information available."
-    
-    make = car_profile.get("make", "")
-    model = car_profile.get("model", "")
-    year = car_profile.get("year", "")
-    
-    if make and model:
-        car_str = f"{year} {make} {model}" if year and year != 2020 else f"{make} {model}"
-    elif make:
-        car_str = f"{year} {make}" if year and year != 2020 else make
-    else:
-        car_str = "Unknown vehicle"
-    
-    summary = f"Vehicle: {car_str}"
-    
-    if car_profile.get("resale_pref"):
-        summary += f"\nPreferences: {car_profile['resale_pref']}"
-    
-    if car_profile.get("mods"):
-        summary += f"\nCurrent mods: {len(car_profile['mods'])} installed"
-    
-    if car_profile.get("symptoms"):
-        summary += f"\nActive issues: {len(car_profile['symptoms'])} reported"
-    
-    return summary 
+# Keep the old function for backward compatibility but make it call the pipeline
+async def update_car_profile_from_query(user_id: str, query: str):
+    """Legacy function - now calls the agent pipeline"""
+    state = {"user_id": user_id, "query": query}
+    result_state = await profile_updater_pipeline(state)
+    return result_state.get("profile_updated", False) 

@@ -176,57 +176,87 @@ async def mcp_retrieval(tool_call: str, **kwargs) -> Dict[str, Any]:
             "fallback_data": "Using general automotive knowledge for build planning"
         }
 
-async def buildplanner_pipeline(state: Dict[str, Any]) -> Dict[str, Any]:
-    prompt_str = buildplanner_prompt.format(
-        car_profile=json.dumps(state["car_profile"], indent=2),
-        mod_recommendations=json.dumps(state["mod_recommendations"], indent=2),
-        agent_trace=json.dumps(state["agent_trace"]),
-        tool_trace=json.dumps(state["tool_trace"])
-    )
-
-    raw = await call_claude(prompt_str)
-    parsed = parse_buildplanner_output(raw)
-
-    state["build_plan"] = parsed["build_plan"]
-    state["agent_trace"].append("buildplanner")
-
-    tool_call = parsed.get("tool_call")
-    tool_output = {}
-
-    if tool_call:
-        tool_output = await mcp_retrieval(
-            tool_call,
-            car_profile=state["car_profile"],
-            build_plan=parsed["build_plan"]
-        )
-
-        state["tool_trace"].append({
-            "agent": "buildplanner",
-            "tool": tool_call,
-            "input": {
-                "car_profile": state["car_profile"],
-                "build_plan": parsed["build_plan"]
-            },
-            "output": tool_output
-        })
-
-        refinement_prompt = buildplanner_refiner.format(
-            car_profile=json.dumps(state["car_profile"], indent=2),
-            build_plan=json.dumps(parsed["build_plan"], indent=2),
-            tool_output=json.dumps(tool_output, indent=2),
-            agent_trace=json.dumps(state["agent_trace"]),
-            tool_trace=json.dumps(state["tool_trace"])
-        )
-
-        refined_raw = await call_claude(refinement_prompt)
-        refined_plan = parse_buildplanner_refined(refined_raw)
-
-        if refined_plan:
-            state["build_plan"] = refined_plan
-
-        state["agent_trace"].append("buildplanner_tool_refiner")
-
-    # Set final message to indicate completion
-    state["final_message"] = "Build plan completed successfully."
+async def buildplanner_pipeline(state):
+    """
+    Fully dynamic LLM-based build planner agent
+    """
     
-    return state
+    query = state.get("query", "")
+    car_profile = state.get("car_profile", {})
+    
+    prompt = f"""
+You are a master build planning expert. Create comprehensive, staged modification plans for automotive builds.
+
+User Query: "{query}"
+Car Profile: {json.dumps(car_profile, indent=2)}
+
+Instructions:
+- Create a logical, staged build plan specific to their car and goals
+- Start with supporting modifications, then move to power modifications
+- Consider budget, timeline, and complexity progression
+- Include realistic costs and timeframes
+- Ensure each stage builds upon the previous ones
+- Be specific to their car platform and goals
+
+Return JSON:
+{{
+    "build_plan": [
+        {{
+            "stage": 1,
+            "name": "descriptive_stage_name",
+            "timeframe": "estimated_time_to_complete",
+            "total_cost": "$XXX-$XXX",
+            "priority": "high|medium|low",
+            "modifications": [
+                {{
+                    "name": "specific_modification",
+                    "cost": "$XXX-$XXX",
+                    "install_time": "time_estimate",
+                    "justification": "why_this_modification_in_this_stage"
+                }}
+            ],
+            "expected_results": "what_this_stage_achieves",
+            "prerequisites": ["required", "supporting", "mods"]
+        }}
+    ],
+    "total_timeline": "overall_build_timeline",
+    "total_cost": "$XXX-$XXX",
+    "final_power_estimate": "estimated_final_horsepower",
+    "build_philosophy": "approach_and_reasoning",
+    "important_considerations": ["key", "notes", "and", "warnings"]
+}}
+
+Create 3-5 logical stages that build upon each other progressively.
+"""
+
+    try:
+        response = await call_claude(prompt, temperature=0.2)
+        
+        # Parse response
+        cleaned_response = response.strip()
+        if cleaned_response.startswith("```json"):
+            cleaned_response = cleaned_response[7:-3]
+        elif cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response[3:-3]
+        
+        result = json.loads(cleaned_response)
+        
+        # Store results in state
+        state["build_plan"] = result.get("build_plan", [])
+        state["total_timeline"] = result.get("total_timeline", "")
+        state["total_build_cost"] = result.get("total_cost", "")
+        state["final_power_estimate"] = result.get("final_power_estimate", "")
+        state["build_philosophy"] = result.get("build_philosophy", "")
+        state["build_considerations"] = result.get("important_considerations", [])
+        
+        return state
+        
+    except Exception as e:
+        print(f"Error in build planner agent: {e}")
+        # Fallback response
+        state["build_plan"] = [{
+            "stage": 1,
+            "name": "Foundation Stage",
+            "modifications": [{"name": "Performance Air Filter", "justification": "Starting point for performance improvements"}]
+        }]
+        return state

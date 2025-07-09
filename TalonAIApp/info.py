@@ -156,37 +156,60 @@ async def mcp_retrieval(tool_call, query):
 #pipeline
 
 async def info_pipeline(state):
-    prompt_str = init_prompt.format(query=state['query'],tool_trace=state['tool_trace'], agent_trace=state['agent_trace'])
-
-    raw = await call_claude(prompt_str)
-    parsed = parse_info_initial(raw)
-
-    state['info_answer'] = parsed['answer']
-    state['agent_trace'].append("info")
-
-    if parsed['tool_call']:
-        tool_output = await mcp_retrieval(parsed['tool_call'], query=state['query'])
-
-        
-        state.setdefault("tool_trace", []).append({
-            "agent": "info",
-            "tool": parsed["tool_call"],
-            "input": {
-                "query": state["query"]
-            },
-            "output": tool_output
-        })
-
-        refinement_prompt = refiner.format(
-            query=state['query'],
-            tool_output=json.dumps(tool_output, indent=2),tool_trace=state['tool_trace'], agent_trace=state['agent_trace']
-        )
-
-        refined = await call_claude(refinement_prompt)
-        state['info_answer'] = refined
-        state["agent_trace"].append("info_tool_refiner")
-
-    # Set final message to indicate completion
-    state["final_message"] = "Information query completed successfully."
+    """
+    Fully dynamic LLM-based info agent - answers general automotive questions
+    """
     
-    return state
+    query = state.get("query", "")
+    car_profile = state.get("car_profile", {})
+    
+    prompt = f"""
+You are an expert automotive assistant. Answer the user's question with accurate, helpful, and enthusiastic information.
+
+User Query: "{query}"
+Car Profile: {json.dumps(car_profile, indent=2)}
+
+Instructions:
+- Provide comprehensive, conversational answers
+- Be specific to their car if the profile is relevant
+- Include practical advice and tips
+- Be enthusiastic about cars and helpful
+- If it's a greeting, be welcoming and explain what you can help with
+- If they mention car details, acknowledge them warmly
+
+Return JSON:
+{{
+    "answer": "your_comprehensive_answer",
+    "car_specific": true_if_you_used_their_car_info,
+    "response_type": "greeting|technical|general|recommendation",
+    "confidence": "high|medium|low"
+}}
+
+Be thorough and helpful in your response.
+"""
+
+    try:
+        response = await call_claude(prompt, temperature=0.3)
+        
+        # Parse response
+        cleaned_response = response.strip()
+        if cleaned_response.startswith("```json"):
+            cleaned_response = cleaned_response[7:-3]
+        elif cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response[3:-3]
+        
+        result = json.loads(cleaned_response)
+        
+        # Store results in state
+        state["info_answer"] = result.get("answer", "I'd be happy to help with automotive questions!")
+        state["info_car_specific"] = result.get("car_specific", False)
+        state["info_response_type"] = result.get("response_type", "general")
+        state["info_confidence"] = result.get("confidence", "medium")
+        
+        return state
+        
+    except Exception as e:
+        print(f"Error in info agent: {e}")
+        # Fallback response
+        state["info_answer"] = "I'm your automotive assistant! I can help with car information, modifications, diagnostics, and build planning. What would you like to know?"
+        return state

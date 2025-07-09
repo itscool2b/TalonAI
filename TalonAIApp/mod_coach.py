@@ -148,63 +148,77 @@ async def mcp_retrieval(tool_name, car_profile, mods):
         }
 
 async def mod_coach_pipeline(state):
-    prompt_str = prompt.format(car_profile=json.dumps(state["car_profile"], indent=2), tool_trace=state['tool_trace'], agent_trace=state['agent_trace'])
-    output = await call_claude(prompt_str)
-    parsed = parse_modcoach_output(output)
+    """
+    Fully dynamic LLM-based modification coach agent
+    """
+    
+    query = state.get("query", "")
+    car_profile = state.get("car_profile", {})
+    
+    prompt = f"""
+You are a performance modification expert and coach. Generate specific, actionable modification recommendations.
 
-    state["mod_recommendations"] = parsed["mod_recommendations"]
-    state["flags"].update(parsed["additional_flags"])
-    state["tool_call"] = parsed["tool_call"]
-    state["agent_trace"].append("modcoach")
+User Query: "{query}"
+Car Profile: {json.dumps(car_profile, indent=2)}
 
-    tool_output = {}
-    if parsed["tool_call"]:
-        tool_output = await mcp_retrieval(
-            parsed["tool_call"],
-            car_profile=state["car_profile"],
-            mods=parsed["mod_recommendations"]
-        )
+Instructions:
+- Generate 3-5 specific modification recommendations
+- Be realistic about costs and gains
+- Consider the user's car platform specifically
+- Prioritize modifications by impact and cost-effectiveness
+- Include installation difficulty and supporting modifications needed
+- Be enthusiastic but realistic about expectations
 
+Return JSON:
+{{
+    "recommendations": [
+        {{
+            "name": "specific_modification_name",
+            "type": "intake|exhaust|engine|suspension|etc",
+            "priority": "high|medium|low",
+            "estimated_cost": "$XXX-$XXX",
+            "power_gain": "estimated_hp_gain",
+            "justification": "why_this_mod_for_their_car",
+            "difficulty": "easy|medium|hard",
+            "supporting_mods": ["required", "supporting", "modifications"]
+        }}
+    ],
+    "total_estimated_cost": "$XXX-$XXX",
+    "expected_results": "overall_performance_improvement",
+    "installation_order": ["mod1", "mod2", "mod3"],
+    "important_notes": ["key", "considerations"]
+}}
+
+Be specific to their car platform and provide realistic recommendations.
+"""
+
+    try:
+        response = await call_claude(prompt, temperature=0.2)
         
-        state.setdefault("tool_trace", []).append({
-            "agent": "modcoach",
-            "tool": parsed["tool_call"],
-            "input": {
-                "car_profile": state["car_profile"],
-                "mod_recommendations": parsed["mod_recommendations"]
-            },
-            "output": tool_output
-        })
-
-    refinement_prompt = modcoach_tool_refiner.format(
-        car_profile=json.dumps(state["car_profile"], indent=2),
-        mod_recommendations=json.dumps(parsed["mod_recommendations"], indent=2),
-        tool_output=json.dumps(tool_output, indent=2),tool_trace=state['tool_trace'], agent_trace=state['agent_trace']
-    )
-    refined_raw = await call_claude(refinement_prompt)
-
-    def parse_refined_mods(output: str) -> List[Dict[str, str]]:
-        try:
-            # Clean up the response - remove markdown code blocks if present
-            cleaned_output = output.strip()
-            if cleaned_output.startswith("```json"):
-                cleaned_output = cleaned_output[7:]
-            if cleaned_output.startswith("```"):
-                cleaned_output = cleaned_output[3:]
-            if cleaned_output.endswith("```"):
-                cleaned_output = cleaned_output[:-3]
-            
-            cleaned_output = cleaned_output.strip()
-            
-            return json.loads(cleaned_output).get("mod_recommendations", [])
-        except Exception as e:
-            return []
-
-    refined_mods = parse_refined_mods(refined_raw)
-    state["mod_recommendations"] = refined_mods
-    state["agent_trace"].append("modcoach_tool_refiner")
-    
-    # Set final message to indicate completion
-    state["final_message"] = "Mod recommendations completed successfully."
-    
-    return state
+        # Parse response
+        cleaned_response = response.strip()
+        if cleaned_response.startswith("```json"):
+            cleaned_response = cleaned_response[7:-3]
+        elif cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response[3:-3]
+        
+        result = json.loads(cleaned_response)
+        
+        # Store results in state
+        state["mod_recommendations"] = result.get("recommendations", [])
+        state["total_mod_cost"] = result.get("total_estimated_cost", "")
+        state["expected_results"] = result.get("expected_results", "")
+        state["installation_order"] = result.get("installation_order", [])
+        state["mod_notes"] = result.get("important_notes", [])
+        
+        return state
+        
+    except Exception as e:
+        print(f"Error in mod coach agent: {e}")
+        # Fallback response
+        state["mod_recommendations"] = [{
+            "name": "Performance Air Filter",
+            "type": "intake",
+            "justification": "Easy first modification with immediate throttle response improvement"
+        }]
+        return state

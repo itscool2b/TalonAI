@@ -175,14 +175,6 @@ async def chat_view(request):
 
     try:
         debug_log("🔍 Loading car profile", user_id)
-        
-        # Try to update car profile from query first
-        try:
-            await update_car_profile_from_query(user_id, user_query)
-            debug_log("✅ Car profile updated from query")
-        except Exception as e:
-            debug_log("⚠️ Car profile update failed", str(e))
-        
         car_profile_dict = await get_car_profile(user_id)
         debug_log("✅ Car profile loaded", car_profile_dict)
     except Exception as e:

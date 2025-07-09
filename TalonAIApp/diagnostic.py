@@ -154,77 +154,90 @@ async def mcp_retrieval(tool_call, car_profile, symptom_query):
         }
 
 
-async def diagnostic_pipeline(state: Dict[str, Any]) -> Dict[str, Any]:
-    prompt_str = init_prompt.format(
-        car_profile=json.dumps(state["car_profile"], indent=2),
-        query=state["query"],
-        agent_trace=json.dumps(state["agent_trace"]),
-        tool_trace=json.dumps(state["tool_trace"])
-    )
+async def diagnostic_pipeline(state):
+    """
+    Fully dynamic LLM-based diagnostic agent
+    """
+    
+    query = state.get("query", "")
+    car_profile = state.get("car_profile", {})
+    
+    prompt = f"""
+You are an expert automotive diagnostic technician. Analyze the user's symptoms and provide comprehensive diagnosis.
 
-    raw = await call_claude(prompt_str)
+User Query: "{query}"
+Car Profile: {json.dumps(car_profile, indent=2)}
+
+Instructions:
+- Analyze any symptoms described in the query
+- Consider the specific car platform and common issues
+- Provide likely causes ranked by probability
+- Include diagnostic steps and recommended actions
+- Be thorough but practical in your recommendations
+- Consider safety concerns and urgency
+
+Return JSON:
+{{
+    "diagnosis": {{
+        "most_likely_cause": "primary_diagnosis",
+        "confidence": "high|medium|low",
+        "explanation": "detailed_explanation_of_the_issue"
+    }},
+    "possible_causes": [
+        {{
+            "cause": "alternative_diagnosis",
+            "probability": "percentage_likelihood",
+            "symptoms_match": "how_well_symptoms_align"
+        }}
+    ],
+    "diagnostic_steps": [
+        {{
+            "step": "what_to_check_or_test",
+            "tools_needed": ["required", "tools"],
+            "difficulty": "easy|medium|hard"
+        }}
+    ],
+    "recommended_actions": [
+        {{
+            "action": "what_to_do",
+            "urgency": "immediate|soon|routine",
+            "estimated_cost": "$XXX-$XXX"
+        }}
+    ],
+    "safety_concerns": ["any", "safety", "issues"]
+}}
+
+Be thorough and consider the specific car platform and its known issues.
+"""
 
     try:
-        # Clean up the response - remove markdown code blocks if present
-        cleaned_raw = raw.strip()
-        if cleaned_raw.startswith("```json"):
-            cleaned_raw = cleaned_raw[7:]
-        if cleaned_raw.startswith("```"):
-            cleaned_raw = cleaned_raw[3:]
-        if cleaned_raw.endswith("```"):
-            cleaned_raw = cleaned_raw[:-3]
+        response = await call_claude(prompt, temperature=0.1)
         
-        cleaned_raw = cleaned_raw.strip()
+        # Parse response
+        cleaned_response = response.strip()
+        if cleaned_response.startswith("```json"):
+            cleaned_response = cleaned_response[7:-3]
+        elif cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response[3:-3]
         
-        parsed = json.loads(cleaned_raw)
-    except json.JSONDecodeError:
-        parsed = {
-            "symptom_summary": "",
-            "tool_call": None
-        }
-
-    state["symptom_summary"] = parsed.get("symptom_summary", "")
-    state["agent_trace"].append("diagnostic")
-
-    tool_call = parsed.get("tool_call")
-    tool_output = {}
-
-    if tool_call:
-        tool_output = await mcp_retrieval(
-            tool_call,
-            car_profile=state["car_profile"],
-            symptom_query=state["query"]
-        )
-
+        result = json.loads(cleaned_response)
         
-        state["tool_trace"].append({
-            "agent": "diagnostic",
-            "tool": tool_call,
-            "input": {
-                "car_profile": state["car_profile"],
-                "symptom_query": state["query"]
-            },
-            "output": tool_output
-        })
-
-        refinement_prompt = refiner.format(
-            car_profile=json.dumps(state["car_profile"], indent=2),
-            query=state["query"],
-            tool_output=json.dumps(tool_output, indent=2),
-            agent_trace=json.dumps(state["agent_trace"]),
-            tool_trace=json.dumps(state["tool_trace"])
-        )
-
-        refined = await call_claude(refinement_prompt)
-        refined_parsed = parse_diagnostic_output(refined)
-
+        # Store results in state
+        diagnosis = result.get("diagnosis", {})
+        state["symptom_summary"] = diagnosis.get("explanation", "")
+        state["most_likely_cause"] = diagnosis.get("most_likely_cause", "")
+        state["diagnosis_confidence"] = diagnosis.get("confidence", "medium")
+        state["possible_causes"] = result.get("possible_causes", [])
+        state["diagnostic_steps"] = result.get("diagnostic_steps", [])
+        state["recommended_actions"] = result.get("recommended_actions", [])
+        state["safety_concerns"] = result.get("safety_concerns", [])
         
-        state["symptom_summary"] = refined_parsed.get("symptom_summary", "")
-        state["agent_trace"].append("diagnostic_tool_refiner")
-
-    # Set final message to indicate completion
-    state["final_message"] = "Diagnostic analysis completed successfully."
-    
-    return state
+        return state
+        
+    except Exception as e:
+        print(f"Error in diagnostic agent: {e}")
+        # Fallback response
+        state["symptom_summary"] = "I'd be happy to help diagnose car issues. Could you describe the specific symptoms you're experiencing?"
+        return state
 
 
