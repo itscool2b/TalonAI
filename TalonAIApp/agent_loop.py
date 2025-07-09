@@ -94,14 +94,11 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
         if any("info" in a for a in trace):
             debug_log("📚 Returning info response")
             info_answer = state.get("info_answer", "")
-            if info_answer and info_answer.strip():
-                message = "Here's what I found for you:"
-            else:
-                message = "Hello! I'm TalonAI, your automotive assistant. What would you like to know about your car?"
+            # Info agent should provide complete responses directly
             return {
                 "type": "info",
                 "response": info_answer,
-                "message": message,
+                "message": info_answer,  # Use the info answer as the message
                 "agent_trace": trace
             }
 
