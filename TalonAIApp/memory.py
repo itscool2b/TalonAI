@@ -72,21 +72,28 @@ async def get_recent_memory(
         # Use sync_to_async to handle the values query
         @sync_to_async
         def get_memories():
-            return list(ConversationMemory.objects.filter(
-                user_id=user_id
-            ).order_by('-created_at')[:limit].values())
+            try:
+                return list(ConversationMemory.objects.filter(
+                    user_id=user_id
+                ).order_by('-created_at')[:limit].values())
+            except Exception as db_error:
+                print(f"⚠️ Database error in get_memories: {db_error}")
+                return []
         
         memories = await get_memories()
         
+        if not memories:
+            return []
+        
         return [
             {
-                "query": memory["query"],
-                "agent_trace": memory["agent_trace"],
-                "final_output": memory["final_output"],
-                "car_profile_snapshot": memory["car_profile_snapshot"],
-                "created_at": memory["created_at"].isoformat()
+                "query": memory.get("query", ""),
+                "agent_trace": memory.get("agent_trace", []),
+                "final_output": memory.get("final_output", {}),
+                "car_profile_snapshot": memory.get("car_profile_snapshot", {}),
+                "created_at": memory.get("created_at", "").isoformat() if memory.get("created_at") else ""
             }
-            for memory in memories
+            for memory in memories if memory
         ]
     except Exception as e:
         print(f"⚠️ Error retrieving recent memory: {e}")

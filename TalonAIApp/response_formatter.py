@@ -69,13 +69,14 @@ def format_agent_response(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def determine_primary_agent(agent_trace: List[str]) -> str:
     """Determine the primary agent based on trace"""
-    # Priority order: diagnostic > modcoach > buildplanner > info
-    if any("diagnostic" in str(a).lower() for a in agent_trace):
+    # Priority order: buildplanner > diagnostic > modcoach > info
+    # BuildPlanner gets priority when it actually runs
+    if any("buildplanner" in str(a).lower() for a in agent_trace):
+        return "buildplanner"
+    elif any("diagnostic" in str(a).lower() for a in agent_trace):
         return "diagnostic"
     elif any("modcoach" in str(a).lower() for a in agent_trace):
         return "modcoach"
-    elif any("buildplanner" in str(a).lower() for a in agent_trace):
-        return "buildplanner"
     elif any("info" in str(a).lower() for a in agent_trace):
         return "info"
     else:
@@ -155,6 +156,10 @@ def format_buildplanner_response(state: Dict[str, Any]) -> Dict[str, Any]:
     if build_plan is None:
         build_plan = []
     
+    # Ensure build_plan is always a list
+    if not isinstance(build_plan, list):
+        build_plan = []
+    
     if build_plan and len(build_plan) > 0:
         message = "Here's your personalized build plan for your car!"
         response_text = format_build_plan_text(build_plan)
@@ -193,6 +198,15 @@ def generate_fallback_info_response(state: Dict[str, Any]) -> str:
     
     elif "name" in query and "car" in query:
         return "I don't currently have your personal information stored. Could you tell me your name and what car you drive? This will help me provide more personalized assistance."
+    
+    elif "build plan" in query or "build" in query:
+        return "I'd be happy to help you create a comprehensive build plan! Tell me about your car, your goals, and your budget, and I'll create a staged modification plan for you."
+    
+    elif "mod" in query or "modification" in query or "upgrade" in query:
+        return "I can help you with performance modifications! Tell me about your car and what you want to achieve, and I'll recommend specific upgrades that would work well for your setup."
+    
+    elif "problem" in query or "issue" in query or "noise" in query or "symptom" in query:
+        return "I can help diagnose car issues! Please describe the symptoms you're experiencing - things like noises, performance problems, warning lights, or any unusual behavior."
     
     else:
         return "I'm here to help with your automotive questions. Whether you need information about car maintenance, performance modifications, diagnostics, or build planning, I'm ready to assist!"
