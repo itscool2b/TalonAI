@@ -23,8 +23,11 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # ───── Copy project files ─────
 COPY . .
 
+# ───── Make startup script executable ─────
+RUN chmod +x startup.sh
+
 # ───── Collect static files (optional for admin panel) ─────
 RUN python manage.py collectstatic --noinput || true
 
-# ───── Gunicorn ASGI command for Django (Render runs CMD) ─────
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "TalonAILinux.asgi:application", "-k", "uvicorn.workers.UvicornWorker"]
+# ───── Use startup script that runs migrations then starts server ─────
+CMD ["./startup.sh", "gunicorn", "--bind", "0.0.0.0:8000", "TalonAILinux.asgi:application", "-k", "uvicorn.workers.UvicornWorker"]

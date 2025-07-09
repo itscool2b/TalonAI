@@ -31,6 +31,9 @@ async def store_conversation_memory(
         await cleanup_old_memories(user_id)
     except Exception as e:
         print(f"⚠️ Error storing conversation memory: {e}")
+        # Check if it's a table doesn't exist error
+        if "does not exist" in str(e):
+            print("💡 Database table missing - run migrations: python manage.py migrate")
         # Don't raise the error - memory storage is not critical
 
 async def cleanup_old_memories(user_id: str, max_memories: int = 10, days_to_keep: int = 7) -> None:
