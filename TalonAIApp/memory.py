@@ -47,7 +47,7 @@ async def cleanup_old_memories(user_id: str, max_memories: int = 10, days_to_kee
         # Get IDs of oldest memories to delete
         old_memories = await ConversationMemory.objects.filter(
             user_id=user_id
-        ).order_by('created_at')[:memory_count - max_memories].values_list('id', flat=True)
+        ).order_by('created_at')[:memory_count - max_memories].avalues_list('id', flat=True)
         
         await ConversationMemory.objects.filter(id__in=old_memories).adelete()
 
@@ -60,7 +60,7 @@ async def get_recent_memory(
     """
     memories = await ConversationMemory.objects.filter(
         user_id=user_id
-    ).order_by('-created_at')[:limit].values()
+    ).order_by('-created_at')[:limit].avalues()
     
     return [
         {
@@ -83,7 +83,7 @@ async def get_session_memory(
     memories = await ConversationMemory.objects.filter(
         user_id=user_id,
         session_id=session_id
-    ).order_by('created_at').values()
+    ).order_by('created_at').avalues()
     
     return [
         {
