@@ -75,6 +75,17 @@ You are NOT a simple classifier. You are an autonomous agent that:
 4. **Use buildplanner agent** only when multi-stage build sequences are needed
 5. **End session** when the user's question has been fully addressed
 
+**EFFICIENCY RULES:**
+- **If info agent has already run and provided a complete answer** → END the session
+- **Don't repeat the same agent multiple times** unless new information is needed
+- **Simple greetings and general questions** → info agent ONCE, then END
+
+**WHEN TO END:**
+- Info agent just handled a greeting (hello, hi, hey) → END immediately
+- Info agent provided a complete answer to a general question → END immediately  
+- Any agent provided what the user requested → END immediately
+- User's question has been fully addressed → END immediately
+
 **Your response must be valid JSON:**
 
 ```json
@@ -200,6 +211,7 @@ async def run_agentic_planner(state):
     if iteration >= max_iterations:
         print(f"⚠️ AGENTIC PLANNER: Reached max iterations, ending session")
         state["final_message"] = "I've reached the maximum number of planning iterations. Please try rephrasing your question if you need more help."
+        state["agent_trace"].append(f"AgenticPlanner[{iteration}] → end: Reached maximum iterations")
     
     return state
 

@@ -42,88 +42,70 @@ async def run_agent_system(state: AgentState) -> Dict[str, Any]:
 
 
     # Check if session ended normally
-    if "end" in str(state.get("agent_trace", [])):
-        # Determine what was accomplished based on the trace
-        trace = state.get("agent_trace", [])
-        debug_log("🎯 Session ended normally", trace)
-        
-        # Priority order: buildplanner > modcoach > diagnostic > info
-        if any("buildplanner" in a for a in trace):
-            debug_log("📋 Returning buildplanner response")
-            build_plan = state.get("build_plan", [])
-            if build_plan and len(build_plan) > 0:
-                message = "Here's your personalized build plan for your car!"
-            else:
-                message = "I'd be happy to help you create a build plan! Tell me about your car and what you want to achieve."
-            return {
-                "type": "buildplanner",
-                "build_plan": build_plan,
-                "message": message,
-                "agent_trace": trace
-            }
-
-        if any("modcoach" in a for a in trace):
-            debug_log("🚗 Returning modcoach response")
-            mod_recommendations = state.get("mod_recommendations", [])
-            if mod_recommendations and len(mod_recommendations) > 0:
-                message = "Here are my recommendations for your next mods!"
-            else:
-                message = "I'd love to help you choose your next modifications! What kind of performance are you looking for?"
-            return {
-                "type": "modcoach",
-                "mod_recommendations": mod_recommendations,
-                "message": message,
-                "agent_trace": trace
-            }
-
-        if any("diagnostic" in a for a in trace):
-            debug_log("🔧 Returning diagnostic response")
-            symptom_summary = state.get("symptom_summary", "")
-            if symptom_summary and symptom_summary.strip():
-                message = "Here's my diagnosis of your car's issue:"
-            else:
-                message = "I'd be happy to help diagnose any car issues. Could you describe what symptoms you're experiencing?"
-            return {
-                "type": "diagnostic",
-                "symptom_summary": symptom_summary,
-                "followup_recommendations": state.get("followup_recommendations", []),
-                "message": message,
-                "agent_trace": trace
-            }
-
-        if any("info" in a for a in trace):
-            debug_log("📚 Returning info response")
-            info_answer = state.get("info_answer", "")
-            # Info agent should provide complete responses directly
-            return {
-                "type": "info",
-                "response": info_answer,
-                "message": info_answer,  # Use the info answer as the message
-                "agent_trace": trace
-            }
-
-        # If no specific agents ran but session ended, it might be a simple query
-        debug_log("💬 Returning simple response")
+    trace = state.get("agent_trace", [])
+    debug_log("🎯 Determining response based on agent trace", trace)
+    
+    # Determine response based on what agents actually ran
+    if any("info" in a for a in trace):
+        debug_log("📚 Returning info response")
+        info_answer = state.get("info_answer", "")
+        # Info agent should provide complete responses directly
         return {
-            "type": "simple_response",
-            "message": state.get("final_message", "Session complete."),
+            "type": "info",
+            "response": info_answer,
+            "message": info_answer,  # Use the info answer as the message
+            "agent_trace": trace
+        }
+        
+    if any("buildplanner" in a for a in trace):
+        debug_log("📋 Returning buildplanner response")
+        build_plan = state.get("build_plan", [])
+        if build_plan and len(build_plan) > 0:
+            message = "Here's your personalized build plan for your car!"
+        else:
+            message = "I'd be happy to help you create a build plan! Tell me about your car and what you want to achieve."
+        return {
+            "type": "buildplanner",
+            "build_plan": build_plan,
+            "message": message,
             "agent_trace": trace
         }
 
-    # If we reach here, something unexpected happened
-    debug_log("❌ Unexpected situation - returning unknown response", {
-        "final_message": state.get("final_message"),
-        "agent_trace": state.get("agent_trace", [])
-    })
-    return {
-        "type": "unknown",
-        "message": "The agentic planner encountered an unexpected situation.",
-        "agent_trace": state.get("agent_trace", []),
-        "debug_info": {
-            "final_message": state.get("final_message"),
-            "flags": state.get("flags", {}),
-            "tool_trace": state.get("tool_trace", [])
+    if any("modcoach" in a for a in trace):
+        debug_log("💪 Returning modcoach response")
+        mod_recommendations = state.get("mod_recommendations", [])
+        if mod_recommendations and len(mod_recommendations) > 0:
+            message = "Here are my mod recommendations for your car:"
+        else:
+            message = "I'd be happy to recommend some mods! Tell me about your car and what you want to achieve."
+        return {
+            "type": "modcoach",
+            "mod_recommendations": mod_recommendations,
+            "message": message,
+            "agent_trace": trace
         }
+
+    if any("diagnostic" in a for a in trace):
+        debug_log("🔧 Returning diagnostic response")
+        symptom_summary = state.get("symptom_summary", "")
+        if symptom_summary and symptom_summary.strip():
+            message = "Here's my diagnosis of your car's issue:"
+        else:
+            message = "I'd be happy to help diagnose any car issues. Could you describe what symptoms you're experiencing?"
+        return {
+            "type": "diagnostic",
+            "symptom_summary": symptom_summary,
+            "followup_recommendations": state.get("followup_recommendations", []),
+            "message": message,
+            "agent_trace": trace
+        }
+
+    # If no specific agents ran, return a simple response
+    debug_log("💬 Returning simple response")
+    return {
+        "type": "info",
+        "message": "I'm your automotive assistant. How can I help you with your car today?",
+        "agent_trace": trace
     }
 
         
