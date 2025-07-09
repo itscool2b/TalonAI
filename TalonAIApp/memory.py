@@ -17,17 +17,21 @@ async def store_conversation_memory(
     """
     Store a conversation interaction in memory
     """
-    await ConversationMemory.objects.acreate(
-        user_id=user_id,
-        session_id=session_id,
-        query=query,
-        agent_trace=agent_trace,
-        final_output=final_output,
-        car_profile_snapshot=car_profile
-    )
-    
-    # Clean up old memories after storing new one
-    await cleanup_old_memories(user_id)
+    try:
+        await ConversationMemory.objects.acreate(
+            user_id=user_id,
+            session_id=session_id,
+            query=query,
+            agent_trace=agent_trace or [],
+            final_output=final_output or {},
+            car_profile_snapshot=car_profile or {}
+        )
+        
+        # Clean up old memories after storing new one
+        await cleanup_old_memories(user_id)
+    except Exception as e:
+        print(f"⚠️ Error storing conversation memory: {e}")
+        # Don't raise the error - memory storage is not critical
 
 async def cleanup_old_memories(user_id: str, max_memories: int = 10, days_to_keep: int = 7) -> None:
     """
@@ -64,25 +68,29 @@ async def get_recent_memory(
     """
     Get recent conversation history for a user
     """
-    # Use sync_to_async to handle the values query
-    @sync_to_async
-    def get_memories():
-        return list(ConversationMemory.objects.filter(
-            user_id=user_id
-        ).order_by('-created_at')[:limit].values())
-    
-    memories = await get_memories()
-    
-    return [
-        {
-            "query": memory["query"],
-            "agent_trace": memory["agent_trace"],
-            "final_output": memory["final_output"],
-            "car_profile_snapshot": memory["car_profile_snapshot"],
-            "created_at": memory["created_at"].isoformat()
-        }
-        for memory in memories
-    ]
+    try:
+        # Use sync_to_async to handle the values query
+        @sync_to_async
+        def get_memories():
+            return list(ConversationMemory.objects.filter(
+                user_id=user_id
+            ).order_by('-created_at')[:limit].values())
+        
+        memories = await get_memories()
+        
+        return [
+            {
+                "query": memory["query"],
+                "agent_trace": memory["agent_trace"],
+                "final_output": memory["final_output"],
+                "car_profile_snapshot": memory["car_profile_snapshot"],
+                "created_at": memory["created_at"].isoformat()
+            }
+            for memory in memories
+        ]
+    except Exception as e:
+        print(f"⚠️ Error retrieving recent memory: {e}")
+        return []
 
 async def get_session_memory(
     user_id: str,

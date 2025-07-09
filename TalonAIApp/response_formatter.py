@@ -6,47 +6,66 @@ def format_agent_response(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Comprehensive response formatter that organizes all state data properly
     """
-    
-    # Extract basic information
-    agent_trace = state.get("agent_trace", [])
-    query = state.get("query", "")
-    user_id = state.get("user_id", "")
-    session_id = state.get("session_id", "")
-    
-    # Determine primary response type based on agent trace
-    primary_agent = determine_primary_agent(agent_trace)
-    
-    # Build comprehensive response
-    response = {
-        "type": primary_agent,
-        "query": query,
-        "user_id": user_id,
-        "session_id": session_id,
-        "timestamp": datetime.utcnow().isoformat(),
-        "agent_trace": agent_trace,
-        "tool_trace": state.get("tool_trace", [])
-    }
-    
-    # Add agent-specific data
-    if primary_agent == "info":
-        response.update(format_info_response(state))
-    elif primary_agent == "modcoach":
-        response.update(format_modcoach_response(state))
-    elif primary_agent == "diagnostic":
-        response.update(format_diagnostic_response(state))
-    elif primary_agent == "buildplanner":
-        response.update(format_buildplanner_response(state))
-    else:
-        response.update(format_default_response(state))
-    
-    # Add car profile information
-    response["car_profile"] = state.get("car_profile", {})
-    
-    # Add debug information if available
-    if state.get("flags"):
-        response["debug_flags"] = state.get("flags")
-    
-    return response
+    try:
+        # Extract basic information with safe defaults
+        agent_trace = state.get("agent_trace", []) or []
+        query = state.get("query", "") or ""
+        user_id = state.get("user_id", "") or ""
+        session_id = state.get("session_id", "") or ""
+        
+        # Determine primary response type based on agent trace
+        primary_agent = determine_primary_agent(agent_trace)
+        
+        # Build comprehensive response
+        response = {
+            "type": primary_agent,
+            "query": query,
+            "user_id": user_id,
+            "session_id": session_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "agent_trace": agent_trace,
+            "tool_trace": state.get("tool_trace", []) or []
+        }
+        
+        # Add agent-specific data with error handling
+        try:
+            if primary_agent == "info":
+                response.update(format_info_response(state))
+            elif primary_agent == "modcoach":
+                response.update(format_modcoach_response(state))
+            elif primary_agent == "diagnostic":
+                response.update(format_diagnostic_response(state))
+            elif primary_agent == "buildplanner":
+                response.update(format_buildplanner_response(state))
+            else:
+                response.update(format_default_response(state))
+        except Exception as e:
+            print(f"⚠️ Error formatting agent response: {e}")
+            response.update(format_default_response(state))
+        
+        # Add car profile information
+        response["car_profile"] = state.get("car_profile", {}) or {}
+        
+        # Add debug information if available
+        if state.get("flags"):
+            response["debug_flags"] = state.get("flags")
+        
+        return response
+        
+    except Exception as e:
+        print(f"❌ Critical error in response formatter: {e}")
+        # Return minimal safe response
+        return {
+            "type": "error",
+            "query": state.get("query", ""),
+            "user_id": state.get("user_id", ""),
+            "session_id": state.get("session_id", ""),
+            "timestamp": datetime.utcnow().isoformat(),
+            "response": "I encountered an error processing your request. Please try again.",
+            "message": "I encountered an error processing your request. Please try again.",
+            "response_type": "error",
+            "error": str(e)
+        }
 
 def determine_primary_agent(agent_trace: List[str]) -> str:
     """Determine the primary agent based on trace"""
@@ -84,6 +103,10 @@ def format_modcoach_response(state: Dict[str, Any]) -> Dict[str, Any]:
     """Format modcoach agent response"""
     mod_recommendations = state.get("mod_recommendations", [])
     
+    # Handle None case
+    if mod_recommendations is None:
+        mod_recommendations = []
+    
     if mod_recommendations and len(mod_recommendations) > 0:
         message = "Here are my mod recommendations for your car:"
         response_text = format_mod_recommendations_text(mod_recommendations)
@@ -97,7 +120,7 @@ def format_modcoach_response(state: Dict[str, Any]) -> Dict[str, Any]:
         "response_type": "modification_recommendations",
         "data": {
             "mod_recommendations": mod_recommendations,
-            "total_recommendations": len(mod_recommendations)
+            "total_recommendations": len(mod_recommendations) if mod_recommendations else 0
         }
     }
 
@@ -128,6 +151,10 @@ def format_buildplanner_response(state: Dict[str, Any]) -> Dict[str, Any]:
     """Format buildplanner agent response"""
     build_plan = state.get("build_plan", [])
     
+    # Handle None case
+    if build_plan is None:
+        build_plan = []
+    
     if build_plan and len(build_plan) > 0:
         message = "Here's your personalized build plan for your car!"
         response_text = format_build_plan_text(build_plan)
@@ -141,7 +168,7 @@ def format_buildplanner_response(state: Dict[str, Any]) -> Dict[str, Any]:
         "response_type": "build_planning",
         "data": {
             "build_plan": build_plan,
-            "total_stages": len(build_plan)
+            "total_stages": len(build_plan) if build_plan else 0
         }
     }
 
@@ -172,12 +199,14 @@ def generate_fallback_info_response(state: Dict[str, Any]) -> str:
 
 def format_mod_recommendations_text(mod_recommendations: List[Dict[str, Any]]) -> str:
     """Format mod recommendations into readable text"""
-    if not mod_recommendations:
+    if not mod_recommendations or mod_recommendations is None:
         return "No specific recommendations available at this time."
     
     text = "Based on your car and goals, here are my recommendations:\n\n"
     
     for i, mod in enumerate(mod_recommendations, 1):
+        if mod is None:
+            continue
         name = mod.get("name", "Unknown Modification")
         mod_type = mod.get("type", "general")
         justification = mod.get("justification", "No details available")
@@ -191,21 +220,26 @@ def format_mod_recommendations_text(mod_recommendations: List[Dict[str, Any]]) -
 
 def format_build_plan_text(build_plan: List[Dict[str, Any]]) -> str:
     """Format build plan into readable text"""
-    if not build_plan:
+    if not build_plan or build_plan is None:
         return "No build plan available at this time."
     
     text = "Here's your comprehensive build plan:\n\n"
     
     for i, stage in enumerate(build_plan, 1):
+        if stage is None:
+            continue
         stage_name = stage.get("stage", f"Stage {i}")
         mods = stage.get("mods", [])
         timeline = stage.get("timeline", "TBD")
         
         text += f"**{stage_name}** (Timeline: {timeline})\n"
         
-        for mod in mods:
-            mod_name = mod.get("name", "Unknown mod")
-            text += f"   • {mod_name}\n"
+        if mods:
+            for mod in mods:
+                if mod is None:
+                    continue
+                mod_name = mod.get("name", "Unknown mod") if isinstance(mod, dict) else str(mod)
+                text += f"   • {mod_name}\n"
         
         text += "\n"
     
